@@ -1,15 +1,28 @@
+import os
+import json
+from google.oauth2.service_account import Credentials
 import openai
 import gradio as gr
 from gtts import gTTS
 from google.cloud import translate_v2 as translate
 import random
-import os
 
 # Set OpenAI API key
 openai.api_key = os.getenv("OPENAI_API_KEY")  # please insert the actual API key here
 
-# Initialize Google Translate client
-translate_client = translate.Client()
+# Extract service account key from environment variable
+raw_service_account_key = os.getenv("GOOGLE_APPLICATION_CREDENTIALS_JSON")
+if raw_service_account_key is None:
+    raise ValueError("The GOOGLE_APPLICATION_CREDENTIALS_JSON environment variable is not set.")
+
+# Parse the JSON service account key
+service_account_key = json.loads(raw_service_account_key)
+
+# Create the credentials object
+credentials = Credentials.from_service_account_info(service_account_key)
+
+# Initialize Google Translate client with the credentials
+translate_client = translate.Client(credentials=credentials)
 
 # Function to translate text to Japanese
 def translate_text(text, target="ja"):
@@ -108,3 +121,4 @@ iface_voice_chat = gr.Interface(
 )
 
 iface_voice_chat.launch()
+
