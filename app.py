@@ -6,7 +6,7 @@ import random
 import os
 
 # Set OpenAI API key
-openai.api_key =   # please insert the actual API key here
+openai.api_key = os.getenv("OPENAI_API_KEY")  # please insert the actual API key here
 
 # Initialize Google Translate client
 translate_client = translate.Client()
