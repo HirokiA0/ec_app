@@ -1,21 +1,22 @@
 import openai
-import streamlit as st
+import gradio as gr
 from gtts import gTTS
+from google.cloud import translate_v2 as translate
 import random
 import os
 
 # Set OpenAI API key
-openai.api_key = os.getenv("OPENAI_API_KEY")  # please insert the actual API key here
+openai.api_key =   # please insert the actual API key here
+
+# Initialize Google Translate client
+translate_client = translate.Client()
 
 # Function to translate text to Japanese
-def translate_to_japanese(input_text):
-    response = openai.Completion.create(
-        engine="text-davinci-003",
-        prompt=f"{input_text}\n\nTranslate the above English text to Japanese:",
-        temperature=0.3,
-        max_tokens=100
-    )
-    return response.choices[0].text.strip()
+def translate_text(text, target="ja"):
+    if text is None:
+        return None
+    result = translate_client.translate(text, target_language=target)
+    return result["input"], result["translatedText"]
 
 # Function to generate a situation
 def generate_situation():
@@ -33,11 +34,11 @@ conversation_history = []
 
 # Function for conversation with ChatGPT
 def chat(situation, user_input):
-    conversation_history.append({'role': 'user', 'content': f'{user_input}'})
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
-        messages=[{'role': 'system', 'content': f'You are a helpful assistant that speaks English and can understand the context. The current situation is: {situation}.'}] + [{'role': m['role'], 'content': m['content']} for m in conversation_history],
+        messages=[{'role': 'system', 'content': f'You are a helpful assistant that speaks English and can understand the context. The current situation is: {situation}. Try to respond in under 50 characters.'}] + [{'role': m['role'], 'content': m['content']} for m in conversation_history],
         temperature=0.5,
+        max_tokens=200
     )
     conversation_history.append({'role': 'assistant', 'content': response["choices"][0]["message"]["content"]})
     return response["choices"][0]["message"]["content"]
@@ -62,51 +63,48 @@ def text_to_speech(input_text):
 
 # User's next possible response generation function
 def generate_user_response(situation, chat_gpt_response):
-    prompt = f"The assistant said: '{chat_gpt_response}' to the user in a situation where they are '{situation}'.\n\nWhat might the user reply:"
+    prompt = f"The assistant said: '{chat_gpt_response}' to the user in a situation where they are '{situation}'.\n\nWhat might the user reply in under 20 characters:"
     response = openai.Completion.create(
         engine="text-davinci-003",
         prompt=prompt,
-        temperature=0.4,
-        max_tokens=100
+        temperature=0.5,
+        max_tokens=20
     )
     return response.choices[0].text.strip()
 
-# Modify voice chat function
-def voice_chat(input_audio, input_text, situation, get_suggested_response):
-    user_text = speech_to_text(input_audio) if input_audio else input_text
-    if user_text == '':
-        raise ValueError("No input provided.")
+# Voice Chat function
+def voice_chat(input_audio, user_text, situation, get_suggested_response):
+    if user_text:
+        user_input = user_text
+    else:
+        user_input = speech_to_text(input_audio)
+
+    # Add user's message to the conversation history
+    conversation_history.append({'role': 'user', 'content': user_input})
+
+    # Generate assistant's response and add it to the conversation history
     response_text = chat(situation, user_text)
     response_audio = text_to_speech(response_text)
+
+    # Generate the next user's response if necessary
     if get_suggested_response:
         next_user_response = generate_user_response(situation, response_text)
-        next_user_response_ja = translate_to_japanese(next_user_response)
     else:
         next_user_response = ''
-        next_user_response_ja = ''
-    conversation_history_translated = [(m['role'] + ": " + m['content'] + " (" + translate_to_japanese(m['content']) + ")") for m in conversation_history]
-    return response_audio, '\n'.join(conversation_history_translated), next_user_response + " (" + next_user_response_ja + ")"
 
-def main():
-    st.title("Voice Chat with ChatGPT")
-    st.write("Speak or write to the chatbot and have a conversation in English!")
+    # Generate the conversation history with translations
+    conversation_history_str = '\n'.join([f"{m['role']}: {m['content']} ({translate_text(m['content'])[1]})" for m in conversation_history if m['content']])
+    next_user_response_ja = translate_text(next_user_response)[1]
 
-    # The inputs
-    input_audio = st.file_uploader("Upload an audio file", type=["mp3", "wav"])
-    input_text = st.text_input("Text Input", "")
-    situation = st.text_input("Situation", generate_situation())
-    get_suggested_response = st.checkbox("Generate Suggested User Response")
+    return response_audio, conversation_history_str, f"{next_user_response} ({next_user_response_ja})"
 
-    if st.button("Start Chat"):
-        if input_audio or input_text:
-            response_audio, chat_history, suggested_response = voice_chat(input_audio, input_text, situation, get_suggested_response)
-            st.audio(response_audio, format='audio/mp3')
-            st.write("Chat History with Translations:")
-            st.write(chat_history)
-            st.write("Suggested User Response:")
-            st.write(suggested_response)
-        else:
-            st.write("Please provide an audio file or text input to start the chat.")
+# Modify Gradio interface
+iface_voice_chat = gr.Interface(
+    fn=voice_chat,
+    inputs=[gr.inputs.Audio(source="microphone", type="filepath"), gr.inputs.Textbox(default="", label="Text Input"), gr.inputs.Textbox(default=generate_situation(), label="Situation"), gr.inputs.Checkbox(label="Generate Suggested User Response")],
+    outputs=[gr.outputs.Audio(type="filepath"), gr.outputs.Textbox(label="Chat History (English and Japanese)"), gr.outputs.Textbox(label="Suggested User Response (English and Japanese)")],
+    title="Voice Chat with ChatGPT",
+    description="Speak or write to the chatbot and have a conversation in English!",
+)
 
-if __name__ == "__main__":
-    main()
+iface_voice_chat.launch()
