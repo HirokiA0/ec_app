@@ -5,7 +5,7 @@ import random
 import os
 
 # Set OpenAI API key
-openai.api_key = "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"  # please insert the actual API key here
+openai.api_key = os.getenv("OPENAI_API_KEY")  # please insert the actual API key here
 
 # Function to translate text to Japanese
 def translate_to_japanese(input_text):
