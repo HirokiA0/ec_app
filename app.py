@@ -114,7 +114,7 @@ def voice_chat(input_audio, user_text, situation, get_suggested_response):
 # Modify Gradio interface
 iface_voice_chat = gr.Interface(
     fn=voice_chat,
-    inputs=[gr.components.Audio(source="microphone", type="filepath"), gr.components.Textbox(default="", label="Text Input"), gr.components.Textbox(default=generate_situation(), label="Situation"), gr.components.Checkbox(label="Generate Suggested User Response")],
+    inputs=[gr.components.Audio(source="microphone", type="filepath"), gr.components.Textbox(label="Text Input"), gr.components.Textbox(label="Situation"), gr.components.Checkbox(label="Generate Suggested User Response")],
     outputs=[gr.components.Audio(type="filepath"), gr.components.Textbox(label="Chat History (English and Japanese)"), gr.components.Textbox(label="Suggested User Response (English and Japanese)")],
     title="Voice Chat with ChatGPT",
     description="Speak or write to the chatbot and have a conversation in English!",
